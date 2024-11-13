@@ -1,6 +1,6 @@
 export default function MissionPage() {
   return (
-    <div className="min-h-screen px-4 mt-4 py-16">
+    <div className="min-h-screen px-4 md:mt-8 mt-4 py-16 mx-12">
       <div className="max-w-4xl mx-auto space-y-8">
         <h1 className="md:text-5xl text-3xl font-medium text-center">
           OpenPisces Mission
