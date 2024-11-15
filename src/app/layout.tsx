@@ -31,9 +31,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
         <Navbar />
-        <main className="flex-1 md:mt-16 mb-16 scroll-optimize">
-          {children}
-        </main>
+        <main className="flex-1 md:mt-16 mt-10 mb-16">{children}</main>
         <Banner />
       </body>
     </html>

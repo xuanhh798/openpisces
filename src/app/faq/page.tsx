@@ -50,7 +50,9 @@ export default function FAQPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-16">
-      <h1 className="text-4xl text-center mb-12">Frequently Asked Questions</h1>
+      <h1 className="text-responsive-4xl text-center mb-12">
+        Frequently Asked Questions
+      </h1>
 
       <div className="space-y-4">
         {faqs.map((faq, index) => (

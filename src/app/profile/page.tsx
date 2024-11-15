@@ -1,3 +1,6 @@
+"use client";
+
+import { useAuth } from "@/hooks/useAuth";
 import Image from "next/image";
 
 interface ProfileStats {
@@ -8,6 +11,16 @@ interface ProfileStats {
 }
 
 export default function ProfilePage() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return null; // Middleware will handle redirect
+  }
+
   const stats: ProfileStats = {
     positionsValue: 0.0,
     marketsTraded: 0,

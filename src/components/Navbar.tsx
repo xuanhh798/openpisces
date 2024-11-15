@@ -16,6 +16,7 @@ export function Navbar() {
   const [showWalletSelector, setShowWalletSelector] = useState(false);
   const [providers, setProviders] = useState<any[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
     // Handle incoming announcements
@@ -42,22 +43,87 @@ export function Navbar() {
     };
   }, []);
 
+  useEffect(() => {
+    const checkExistingConnection = async () => {
+      const token = localStorage.getItem("token");
+      const savedProvider = localStorage.getItem("walletProvider");
+
+      if (!token || !savedProvider) return;
+
+      if (savedProvider === "phantom" && window.solana?.isPhantom) {
+        try {
+          const resp = await window.solana.connect({ onlyIfTrusted: true });
+          if (resp) {
+            setIsConnected(true);
+            setWalletProvider("phantom");
+          }
+        } catch (error) {
+          console.log("Not connected to Phantom");
+          localStorage.removeItem("token");
+          localStorage.removeItem("walletProvider");
+        }
+      } else if (savedProvider === "metamask" && window.ethereum) {
+        try {
+          const accounts = await window.ethereum.request({
+            method: "eth_accounts",
+          });
+          if (accounts.length > 0) {
+            setIsConnected(true);
+            setWalletProvider("metamask");
+          }
+        } catch (error) {
+          console.log("Not connected to MetaMask");
+          localStorage.removeItem("token");
+          localStorage.removeItem("walletProvider");
+        }
+      }
+    };
+
+    checkExistingConnection();
+  }, []);
+
   const truncateAddress = (address: string) => {
     if (!address) return "";
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
+  };
+
+  const disconnectCurrentWallet = async () => {
+    if (window.solana && walletProvider === "phantom") {
+      try {
+        await window.solana.disconnect();
+      } catch (error) {
+        console.error("Error disconnecting Phantom:", error);
+      }
+    }
+
+    // For MetaMask, we just clear our local state since we can't forcefully disconnect
+    if (walletProvider === "metamask") {
+      // We can unsubscribe from MetaMask events if we've set any
+      if (window.ethereum) {
+        window.ethereum.removeAllListeners?.();
+      }
+    }
   };
 
   const handleWalletAction = async () => {
     if (isConnected) {
       setShowDisconnectPopup(true);
     } else {
+      await disconnectCurrentWallet(); // Disconnect any existing wallet
       setShowWalletSelector(true);
     }
   };
 
   const handlePhantomConnect = async () => {
     try {
-      await window.solana.connect();
+      await disconnectCurrentWallet(); // Disconnect any existing wallet
+
+      // Clear existing tokens
+      localStorage.removeItem("token");
+      localStorage.removeItem("walletProvider");
+
+      // Connect Phantom
+      const resp = await window.solana.connect();
       const message =
         "Sign in to OpenPisces: " + window.solana.publicKey.toBase58();
       const encodedMessage = new TextEncoder().encode(message);
@@ -80,6 +146,7 @@ export function Navbar() {
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem("token", data.token);
+        localStorage.setItem("walletProvider", "phantom");
         setIsConnected(true);
         setWalletProvider("phantom");
         setShowWalletSelector(false);
@@ -88,29 +155,20 @@ export function Navbar() {
         console.error("Signature verification failed");
       }
     } catch (error) {
-      console.error("Error connecting wallet:", error);
+      console.error("Error connecting to Phantom:", error);
     }
   };
 
   const handleMetaMaskConnect = async () => {
     try {
-      // Find MetaMask provider from EIP-6963 announcements
-      const metamaskProvider = providers.find(
-        (p) =>
-          p.info.rdns.includes("metamask") ||
-          p.info.name.toLowerCase().includes("metamask")
-      )?.provider;
+      await disconnectCurrentWallet(); // Disconnect any existing wallet
 
-      // Fall back to window.ethereum if no EIP-6963 provider found
-      const provider = metamaskProvider || window.ethereum;
+      // Clear existing tokens
+      localStorage.removeItem("token");
+      localStorage.removeItem("walletProvider");
 
-      if (!provider) {
-        alert("Please install MetaMask to continue");
-        return;
-      }
-
-      // Request account access
-      const accounts = await provider.request({
+      // Connect MetaMask
+      const accounts = await window.ethereum.request({
         method: "eth_requestAccounts",
       });
 
@@ -121,7 +179,7 @@ export function Navbar() {
       const message = `Sign in to OpenPisces: ${account}`;
 
       // Request signature
-      const signature = await provider.request({
+      const signature = await window.ethereum.request({
         method: "personal_sign",
         params: [message, account],
       });
@@ -142,6 +200,7 @@ export function Navbar() {
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem("token", data.token);
+        localStorage.setItem("walletProvider", "metamask");
         setIsConnected(true);
         setWalletProvider("metamask");
         setShowWalletSelector(false);
@@ -150,20 +209,25 @@ export function Navbar() {
         console.error("Signature verification failed");
       }
     } catch (error) {
-      console.error("Error connecting MetaMask:", error);
+      console.error("Error connecting to MetaMask:", error);
     }
   };
 
   const handleDisconnect = async () => {
     try {
-      if (walletProvider === "phantom") {
-        await window.solana.disconnect();
-      }
+      await disconnectCurrentWallet();
 
+      // Clear all stored data
       localStorage.removeItem("token");
+      localStorage.removeItem("walletProvider");
+      document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+
+      // Reset state
       setIsConnected(false);
       setWalletProvider(null);
       setShowDisconnectPopup(false);
+
+      // Redirect to home
       router.push("/");
     } catch (error) {
       console.error("Error disconnecting wallet:", error);
@@ -192,6 +256,63 @@ export function Navbar() {
 
     return account;
   };
+
+  // Add MetaMask account change listener
+  useEffect(() => {
+    if (window.ethereum && walletProvider === "metamask") {
+      window.ethereum.on("accountsChanged", (accounts: string[]) => {
+        if (accounts.length === 0) {
+          // User disconnected their wallet from the dApp
+          handleDisconnect();
+        }
+      });
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeAllListeners?.();
+      }
+    };
+  }, [walletProvider]);
+
+  // Add this new component inside the Navbar component
+  const NavItems = ({
+    mobile = false,
+    onItemClick,
+  }: {
+    mobile?: boolean;
+    onItemClick?: () => void;
+  }) => {
+    const itemClass = mobile
+      ? "py-4 text-lg font-medium hover:text-gray-500 transition-colors"
+      : "hover:text-gray-500 transition-colors";
+
+    return (
+      <>
+        <Link href="/create" className={itemClass} onClick={onItemClick}>
+          Start A Fund
+        </Link>
+        <Link href="/mission" className={itemClass} onClick={onItemClick}>
+          Mission
+        </Link>
+        <Link href="/faq" className={itemClass} onClick={onItemClick}>
+          FAQ
+        </Link>
+        <Link href="/profile" className={itemClass} onClick={onItemClick}>
+          Profile
+        </Link>
+      </>
+    );
+  };
+
+  const handleMobileMenuClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsMobileMenuOpen(false);
+      setIsClosing(false);
+    }, 300); // Match this with animation duration
+  };
+
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 md:px-16 py-2 bg-white">
@@ -255,27 +376,7 @@ export function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-8 text-black">
-          <Link
-            href="/create"
-            className="hover:text-gray-500 transition-colors"
-          >
-            Start A Fund
-          </Link>
-          <Link
-            href="/mission"
-            className="hover:text-gray-500 transition-colors"
-          >
-            Mission
-          </Link>
-          <Link href="/faq" className="hover:text-gray-500 transition-colors">
-            FAQ
-          </Link>
-          <Link
-            href="/profile"
-            className="hover:text-gray-500 transition-colors"
-          >
-            Profile
-          </Link>
+          <NavItems />
           <button
             className="px-4 py-2 rounded-lg transition-colors border hover:text-gray-500 border-black"
             onClick={handleWalletAction}
@@ -287,22 +388,28 @@ export function Navbar() {
 
       {/* Mobile Navigation Menu */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-10 md:hidden">
+        <div className="fixed inset-0 z-50 md:hidden">
           <div
-            className="fixed inset-0 bg-black opacity-25"
-            onClick={() => setIsMobileMenuOpen(false)}
+            className={`fixed inset-0 bg-black ${
+              isClosing ? "fade-out" : "fade-in"
+            }`}
+            onClick={handleMobileMenuClose}
           />
-          <div className="fixed top-[3.5rem] right-0 w-64 h-full bg-white shadow-lg">
-            <div className="flex flex-col p-4">
-              <div className="mb-4">
+          <div
+            className={`fixed top-[3.5rem] right-0 w-72 h-full bg-white shadow-lg ${
+              isClosing ? "slide-out" : "slide-in"
+            }`}
+          >
+            <div className="flex flex-col p-6">
+              <div className="mb-6">
                 <div className="relative">
                   <input
                     type="text"
                     placeholder="Search for causes"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:border-gray-400"
+                    className="w-full px-4 py-3 text-base rounded-xl border border-gray-300 focus:outline-none focus:border-gray-400"
                   />
                   <svg
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 w-6 h-6 text-gray-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -316,32 +423,9 @@ export function Navbar() {
                   </svg>
                 </div>
               </div>
-              <a
-                href="/create"
-                className="py-2 hover:text-gray-500 transition-colors"
-              >
-                Start A Fund
-              </a>
-              <a
-                href="/mission"
-                className="py-2 hover:text-gray-500 transition-colors"
-              >
-                Mission
-              </a>
-              <a
-                href="/faq"
-                className="py-2 hover:text-gray-500 transition-colors"
-              >
-                FAQ
-              </a>
-              <a
-                href="/profile"
-                className="py-2 hover:text-gray-500 transition-colors"
-              >
-                Profile
-              </a>
+              <NavItems mobile onItemClick={handleMobileMenuClose} />
               <button
-                className="mt-2 px-4 py-2 rounded-lg transition-colors border hover:text-gray-500 border-black"
+                className="mt-4 px-4 py-3 text-lg font-medium rounded-lg transition-colors border hover:text-gray-500 border-black"
                 onClick={handleWalletAction}
               >
                 {isConnected ? getWalletAddress() : "Login"}
