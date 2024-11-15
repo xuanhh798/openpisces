@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import jwt from "jsonwebtoken";
+import { jwtVerify } from "jose"; // Use jose instead of jsonwebtoken
 
 // Define protected routes that require authentication
 const protectedRoutes = ["/profile", "/create"];
@@ -9,9 +9,8 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Check if the requested path is in protectedRoutes
-  if (protectedRoutes.includes(pathname)) {
-    const token = request.cookies.get("token")?.value;
-
+  if (protectedRoutes.some((route) => pathname.startsWith(route))) {
+    const token = request.cookies.get("token");
     if (!token) {
       // Redirect to home page if no token is found
       return NextResponse.redirect(new URL("/", request.url));
@@ -19,15 +18,19 @@ export async function middleware(request: NextRequest) {
 
     try {
       // Verify the JWT token
-      const JWT_SECRET = new TextEncoder().encode(
-        process.env.JWT_SECRET || "your-secret-key"
-      );
+      const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
-      await jwt.verify(token, JWT_SECRET);
+      // Convert the secret to a Uint8Array
+      const encoder = new TextEncoder();
+      const secret = encoder.encode(JWT_SECRET);
+
+      await jwtVerify(token.value, secret);
 
       // Token is valid, allow the request to continue
+      console.log("Token is valid");
       return NextResponse.next();
     } catch (error) {
+      console.log("Token is invalid", error);
       // Token is invalid, redirect to home page
       return NextResponse.redirect(new URL("/", request.url));
     }
@@ -38,15 +41,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico|public).*)",
-  ],
+  matcher: ["/profile/:path*", "/create/:path*"],
 };

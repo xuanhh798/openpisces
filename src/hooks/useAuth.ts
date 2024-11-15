@@ -6,29 +6,21 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  console.log("auth test");
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setIsAuthenticated(false);
-      setIsLoading(false);
-      router.push("/");
-      return;
-    }
-
     // Verify token validity
     const verifyToken = async () => {
       try {
+        console.log("Verifying token...");
         const response = await fetch("/api/auth/verify-token", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: "include",
         });
+        console.log("Token verification response:", response.status);
 
         if (response.ok) {
+          console.log("Token verified successfully");
           setIsAuthenticated(true);
         } else {
-          localStorage.removeItem("token");
+          console.log("Token verification failed");
           document.cookie =
             "token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
           setIsAuthenticated(false);
@@ -43,7 +35,7 @@ export function useAuth() {
     };
 
     verifyToken();
-  }, [router]);
+  }, []);
 
   return { isAuthenticated, isLoading };
 }

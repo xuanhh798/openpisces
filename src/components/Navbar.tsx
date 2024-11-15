@@ -45,10 +45,9 @@ export function Navbar() {
 
   useEffect(() => {
     const checkExistingConnection = async () => {
-      const token = localStorage.getItem("token");
       const savedProvider = localStorage.getItem("walletProvider");
 
-      if (!token || !savedProvider) return;
+      if (!savedProvider) return;
 
       if (savedProvider === "phantom" && window.solana?.isPhantom) {
         try {
@@ -59,7 +58,6 @@ export function Navbar() {
           }
         } catch (error) {
           console.log("Not connected to Phantom");
-          localStorage.removeItem("token");
           localStorage.removeItem("walletProvider");
         }
       } else if (savedProvider === "metamask" && window.ethereum) {
@@ -73,7 +71,6 @@ export function Navbar() {
           }
         } catch (error) {
           console.log("Not connected to MetaMask");
-          localStorage.removeItem("token");
           localStorage.removeItem("walletProvider");
         }
       }
@@ -118,10 +115,6 @@ export function Navbar() {
     try {
       await disconnectCurrentWallet(); // Disconnect any existing wallet
 
-      // Clear existing tokens
-      localStorage.removeItem("token");
-      localStorage.removeItem("walletProvider");
-
       // Connect Phantom
       const resp = await window.solana.connect();
       const message =
@@ -144,8 +137,6 @@ export function Navbar() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem("token", data.token);
         localStorage.setItem("walletProvider", "phantom");
         setIsConnected(true);
         setWalletProvider("phantom");
@@ -162,10 +153,6 @@ export function Navbar() {
   const handleMetaMaskConnect = async () => {
     try {
       await disconnectCurrentWallet(); // Disconnect any existing wallet
-
-      // Clear existing tokens
-      localStorage.removeItem("token");
-      localStorage.removeItem("walletProvider");
 
       // Connect MetaMask
       const accounts = await window.ethereum.request({
@@ -198,8 +185,6 @@ export function Navbar() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem("token", data.token);
         localStorage.setItem("walletProvider", "metamask");
         setIsConnected(true);
         setWalletProvider("metamask");
@@ -217,12 +202,12 @@ export function Navbar() {
     try {
       await disconnectCurrentWallet();
 
-      // Clear all stored data
-      localStorage.removeItem("token");
+      // Clear wallet provider from localStorage
       localStorage.removeItem("walletProvider");
+
+      // Clear the cookie by setting it to expire
       document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
 
-      // Reset state
       setIsConnected(false);
       setWalletProvider(null);
       setShowDisconnectPopup(false);
