@@ -50,15 +50,12 @@ export async function POST(request: Request) {
         { status: 200 }
       );
 
-      // Ensure that NODE_ENV is 'development' during development
-      const isProduction = process.env.NODE_ENV === "production";
-
       // Set the JWT token as an HTTP-only cookie
       response.cookies.set({
         name: "token",
         value: token,
         httpOnly: true,
-        secure: false, // Only use HTTPS in production
+        secure: true, // Only use HTTPS in production
         sameSite: "lax",
         path: "/",
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now

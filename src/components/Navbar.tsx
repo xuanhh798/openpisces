@@ -198,6 +198,28 @@ export function Navbar() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        // Clear client-side authentication state
+        setIsConnected(false);
+        setWalletProvider(null);
+        setShowDisconnectPopup(false);
+
+        // Redirect to home
+        router.push("/");
+      } else {
+        console.error("Logout failed:", response.status);
+      }
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
   const handleDisconnect = async () => {
     try {
       await disconnectCurrentWallet();
@@ -205,8 +227,8 @@ export function Navbar() {
       // Clear wallet provider from localStorage
       localStorage.removeItem("walletProvider");
 
-      // Clear the cookie by setting it to expire
-      document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+      // Call the logout API to clear the cookie on the server
+      await handleLogout();
 
       setIsConnected(false);
       setWalletProvider(null);
